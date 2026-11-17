@@ -40,7 +40,8 @@ export function createLocalLaunch({ dialog, list, status, onReady }: LocalLaunch
   async function launch(id: string, note: HTMLElement) {
     launching = new AbortController()
     const { signal } = launching
-    const buttons = [...list.querySelectorAll("button")]
+    // The keys' launch button goes too: pressed while a model loads, it would ask for the keys local mode does not need.
+    const buttons = [...list.querySelectorAll("button"), ...dialog.querySelectorAll<HTMLButtonElement>("button[value=live]")]
     const before = note.textContent
     for (const button of buttons) button.disabled = true
     status.value = ""
@@ -59,7 +60,7 @@ function modelItem(model: EngineModel, isLoaded: boolean, launch: (id: string, n
   const item = document.createElement("li")
   const button = Object.assign(document.createElement("button"), { type: "button" })
   const note = document.createElement("small")
-  note.textContent = isLoaded ? "loaded" : model.downloaded ? "on disk" : `downloads ${gigabytes(model.size)}`
+  note.textContent = isLoaded ? "loaded" : model.downloaded ? "on disk" : `download ${gigabytes(model.size)}`
   button.append(model.name, note)
   button.addEventListener("click", () => launch(model.id, note))
   item.append(button)

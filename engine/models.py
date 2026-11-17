@@ -62,4 +62,5 @@ def download(model: dict, progress: dict):
             if self.counts_bytes:
                 progress["done"] = max(progress["done"], self.n)
 
-    return snapshot_download(model["repo"], revision=model["revision"], allow_patterns=WEIGHT_FILES, tqdm_class=Progress)
+    # The repositories are public; without `token=False` an expired token saved on this machine gets the request refused.
+    return snapshot_download(model["repo"], revision=model["revision"], allow_patterns=WEIGHT_FILES, tqdm_class=Progress, token=False)

@@ -3,15 +3,23 @@ name = "spaceship-engine"
 version = "0.1.0"
 description = "Local MLX backend for Spaceship IDE: steers small open models through their activations and attention"
 requires-python = ">=3.11"
-dependencies = ["mlx-lm==0.31.3"]
+# mlx-lm asks for mlx on a Mac only; elsewhere the cuda and cpu extras add a backend to it but not mlx itself.
+dependencies = ["mlx==0.32.4", "mlx-lm==0.31.3"]
 
 # MLX runs on Metal on a Mac. Elsewhere it needs a backend: CUDA for an NVIDIA GPU, or the much slower CPU one.
 [project.optional-dependencies]
-cuda = ["mlx-cuda-12==0.32.4; sys_platform != 'darwin'"]
+# mlx compiles some kernels at run time against the CUDA headers, which nvidia-cuda-runtime-cu12 ships without the toolkit.
+cuda = ["mlx-cuda-12==0.32.4; sys_platform != 'darwin'", "nvidia-cuda-runtime-cu12==12.9.*; sys_platform != 'darwin'"]
 cpu = ["mlx-cpu==0.32.4; sys_platform != 'darwin'"]
 
 [tool.uv]
 conflicts = [[{ extra = "cuda" }, { extra = "cpu" }]]
+# Lock versions that have wheels for every platform local mode supports; some nvidia-*-cu12 releases ship Linux wheels only.
+required-environments = [
+  "sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "sys_platform == 'win32' and platform_machine == 'AMD64'",
+]
 # mlx-cuda-12's Windows wheel does not ask for NCCL, which has no Windows build, but the lock takes its Linux wheel's list.
 override-dependencies = ["nvidia-nccl-cu12; sys_platform == 'linux'"]
 

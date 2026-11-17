@@ -11,10 +11,26 @@ import os
 import queue
 import re
 import sys
+import sysconfig
 import threading
 import time
 import traceback
+import types
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+# On Windows the CUDA wheels keep their DLLs in site-packages/nvidia/*/bin, where Windows looks neither when mlx loads nor
+# when NVRTC loads its builtins, and mlx finds the headers for the kernels it compiles at run time only through CUDA_PATH.
+# mlx_lm imports the Unix-only resource module just to raise the open-file limit, which Windows does not need.
+if sys.platform == "win32":
+    nvidia = Path(sysconfig.get_paths()["purelib"]) / "nvidia"
+    bin_dirs = [str(path) for path in nvidia.glob("*/bin")]
+    for bin_dir in bin_dirs:
+        os.add_dll_directory(bin_dir)
+    os.environ["PATH"] = os.pathsep.join([*bin_dirs, os.environ["PATH"]])
+    if (nvidia / "cuda_runtime" / "include").is_dir():
+        os.environ.setdefault("CUDA_PATH", str(nvidia / "cuda_runtime"))
+    sys.modules["resource"] = types.SimpleNamespace(RLIMIT_NOFILE=None, setrlimit=lambda *_: None)
 
 import mlx.core as mx
 
