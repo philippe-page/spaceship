@@ -31,3 +31,7 @@ token-usage.log
 
 # written by scripts/capture
 .capture
+
+# local MLX engine
+engine/.venv
+__pycache__

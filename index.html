@@ -54,6 +54,8 @@
         --dimmed: 0.3;
         /* The ruler beside the column: one row per line, each this tall like the text. */
         --rail-width: 144px;
+        /* The inside view's sidebar, in local mode. */
+        --inside-width: 34ch;
         scrollbar-gutter: stable;
         background: var(--bg);
         color: var(--ink);
@@ -525,6 +527,146 @@
           right: calc(100% + var(--gap));
         }
       }
+      /*
+       * Local mode, inside on: words that steering flipped, compared with an unsteered copy of the model reading the same text,
+       * underlined in dots, from faint to full ink by how many times likelier steering made them.
+       */
+      ::highlight(steering-flipped-1) {
+        text-decoration: underline dotted var(--stroke) var(--ink-4);
+      }
+      ::highlight(steering-flipped-2) {
+        text-decoration: underline dotted var(--stroke) var(--ink-3);
+      }
+      ::highlight(steering-flipped-3) {
+        text-decoration: underline dotted var(--stroke) var(--ink-2);
+      }
+      ::highlight(steering-flipped-4) {
+        text-decoration: underline dotted var(--stroke) var(--ink);
+      }
+      /* Local mode, inside on: the sidebar, pinned to the left edge; the page makes room for it, and the column gives up its left margin before it narrows. */
+      body:has(#inside:not([hidden])) {
+        padding-left: var(--inside-width);
+
+        #text {
+          --column: clamp(30ch, 100% - var(--rail-width) - 1.5 * var(--gap) - var(--margin), 64ch);
+          width: var(--column);
+          margin-left: max(var(--rail-width) + 1.5 * var(--gap), (100% - var(--column)) / 2);
+        }
+      }
+      #inside {
+        position: fixed;
+        inset: 0 auto var(--tray-height) 0;
+        width: var(--inside-width);
+        box-sizing: border-box;
+        padding: var(--padding) calc(1.5 * var(--gap));
+        overflow-y: auto;
+        border-right: var(--hair) solid var(--ink-5);
+        background: var(--bg);
+        font-size: var(--hud-size);
+        line-height: var(--hud-line);
+        font-variant-numeric: tabular-nums;
+        user-select: none;
+
+        section + section {
+          margin-top: calc(3 * var(--gap));
+        }
+        h2 {
+          display: flex;
+          justify-content: space-between;
+          margin: 0 0 var(--gap);
+          font: inherit;
+          color: var(--ink-4);
+          white-space: nowrap;
+        }
+        .flips ol {
+          margin: 0;
+          padding: 0;
+          list-style: none;
+          color: var(--ink-3);
+
+          li {
+            display: flex;
+            gap: 0.5ch;
+          }
+          s {
+            text-decoration: line-through var(--hair);
+          }
+          b {
+            font-weight: inherit;
+            color: var(--ink);
+          }
+          small {
+            margin-left: auto;
+            font-size: inherit;
+          }
+        }
+      }
+      /* Hovering a generated word: the same reading as the sidebar's, for that word. */
+      #odds {
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 10;
+        min-width: 30ch;
+        padding: var(--gap);
+        border: var(--hair) solid var(--ink-4);
+        background: var(--bg);
+        font-size: var(--hud-size);
+        line-height: var(--hud-line);
+        font-variant-numeric: tabular-nums;
+        pointer-events: none;
+      }
+      /* The candidates for a word, steered and unsteered. */
+      :is(#inside, #odds) {
+        .candidates {
+          display: grid;
+          gap: 2px;
+          margin: 0;
+          padding: 0;
+          list-style: none;
+        }
+        .candidates li {
+          display: grid;
+          grid-template-columns: 12ch 1fr 9ch;
+          column-gap: var(--gap);
+          align-items: center;
+          color: var(--ink-2);
+
+          &[data-chosen] {
+            color: var(--ink);
+          }
+          &.legend {
+            color: var(--ink-4);
+          }
+        }
+        .token {
+          overflow: hidden;
+          white-space: pre;
+          text-overflow: ellipsis;
+        }
+        /* Probability with steering as a solid bar, without as a hairline one. */
+        .bars {
+          display: grid;
+          gap: 2px;
+
+          i {
+            height: 3px;
+          }
+          .on {
+            width: calc(var(--on) * 100%);
+            background: currentColor;
+          }
+          .off {
+            box-sizing: border-box;
+            width: calc(var(--off) * 100%);
+            border: var(--hair) solid var(--ink-3);
+          }
+        }
+        .pct {
+          white-space: pre;
+          text-align: end;
+        }
+      }
       /* Polybar-style modules in one centered row: model, text, steering, sound; a hairline between every field. */
       #tray {
         position: fixed;
@@ -603,6 +745,7 @@
         display: contents;
       }
       #mode-toggle,
+      #inside-toggle,
       #sound-toggle,
       #extra-link {
         padding: 0 var(--gap);
@@ -644,6 +787,7 @@
       #extra-link {
         text-decoration: none;
       }
+      #inside-toggle[aria-pressed="false"],
       #sound-toggle[aria-pressed="false"] {
         color: var(--ink-4);
       }
@@ -679,6 +823,32 @@
           display: grid;
           grid-template-columns: 9ch 1fr;
           align-items: center;
+        }
+        #local-models {
+          display: grid;
+          gap: var(--gap);
+          margin: 0;
+          padding: 0;
+          list-style: none;
+          &:empty {
+            display: none;
+          }
+          button {
+            display: flex;
+            justify-content: space-between;
+            gap: 1ch;
+            width: 100%;
+          }
+          small {
+            font: inherit;
+            color: var(--ink-3);
+          }
+        }
+        output {
+          color: var(--ink-2);
+          &:empty {
+            display: none;
+          }
         }
         input,
         button {
@@ -849,8 +1019,19 @@
     </style>
   </head>
   <body>
+    <aside id="inside" aria-label="steering inside the model" hidden>
+      <section class="at-knob">
+        <h2>at the knob</h2>
+        <ol class="candidates"></ol>
+      </section>
+      <section class="flips" hidden>
+        <h2>flipped<span data-field="flips"></span></h2>
+        <ol></ol>
+      </section>
+    </aside>
     <div id="rail" aria-hidden="true"></div>
     <div id="text"></div>
+    <div id="odds" role="tooltip" hidden></div>
     <svg id="links" aria-hidden="true">
       <path id="attention-links" />
       <path id="attention-active-link" />
@@ -871,6 +1052,9 @@
     <footer id="tray">
       <button id="mode-toggle" type="button" aria-pressed="false" aria-label="flight mode">mode<b>sim</b></button>
       <output id="status" aria-live="off"></output>
+      <button id="inside-toggle" type="button" aria-pressed="false" title="each word compared with an unsteered copy of the model" hidden>
+        inside<b>off</b>
+      </button>
       <button id="sound-toggle" type="button" aria-pressed="true" aria-label="sound">♪<b>on</b></button>
       <a id="extra-link" href="extra/style-1.html">extra</a>
     </footer>
@@ -909,6 +1093,9 @@
             data-bwignore
             data-form-type="other"
         /></label>
+        <p>Or fly local with no keys, steering a model on this machine from inside.</p>
+        <ul id="local-models" aria-label="local models"></ul>
+        <output id="local-status" aria-live="polite"></output>
         <p class="actions">
           <button type="button" command="close" commandfor="live-keys">abort</button>
           <button value="live">launch</button>

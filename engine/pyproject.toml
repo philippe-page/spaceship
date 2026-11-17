@@ -1,0 +1,27 @@
+[project]
+name = "spaceship-engine"
+version = "0.1.0"
+description = "Local MLX backend for Spaceship IDE: steers small open models through their activations and attention"
+requires-python = ">=3.11"
+dependencies = ["mlx-lm==0.31.3"]
+
+# MLX runs on Metal on a Mac. Elsewhere it needs a backend: CUDA for an NVIDIA GPU, or the much slower CPU one.
+[project.optional-dependencies]
+cuda = ["mlx-cuda-12==0.32.4; sys_platform != 'darwin'"]
+cpu = ["mlx-cpu==0.32.4; sys_platform != 'darwin'"]
+
+[tool.uv]
+conflicts = [[{ extra = "cuda" }, { extra = "cpu" }]]
+# mlx-cuda-12's Windows wheel does not ask for NCCL, which has no Windows build, but the lock takes its Linux wheel's list.
+override-dependencies = ["nvidia-nccl-cu12; sys_platform == 'linux'"]
+
+[tool.ruff]
+line-length = 140
+# Kept as close to its source as its header says.
+extend-exclude = ["lfm3.py"]
+
+[tool.ruff.lint]
+ignore = [
+  "BLE001", # the server reports any failure of a job or a download to the page and keeps running
+  "SIM905", # a word list reads better as one string than as a literal per word
+]

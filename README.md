@@ -8,6 +8,17 @@ Steer your ideas in realtime, space pilot style!
 
 Watch on [Instagram](https://www.instagram.com/reels/DfyQPhFtW-z/) and [YouTube](https://www.youtube.com/watch?v=3WmNLWUmcnY). You can try the simulator at [https://chuanqisun.github.io/spaceship/](https://chuanqisun.github.io/spaceship/) with the option to go live with your API keys for Cerebras and Gemini. Keys stay in your browser local storage. Do it at your own risk.
 
+## Local mode
+
+Flight mode steers hosted models through their prompts. Local mode runs a small open model (LFM3 1.7B or Qwen3.5 2B) on your machine with [MLX](https://github.com/ml-explore/mlx) and works on the model's internals instead, with the same interface: the future knobs add steering vectors to its activations, the attention boxes bias its attention, and the readouts come from its own attention weights and likelihoods. With [uv](https://docs.astral.sh/uv/) and Node:
+
+```sh
+npm install
+npm run local    # starts the engine and the page; pick a model in the dialog, and it downloads then
+```
+
+How each interaction works inside the model, what has and has not been tested, and the licenses are in [engine/README.md](./engine/README.md).
+
 ## Conjecture
 
 > In the near future, LLM and Decision Models will reach 60 FPS interactivity.

@@ -9,9 +9,10 @@ const MARGIN_Y_PX = 16
 
 type Viewport = { left: number; top: number; right: number; bottom: number }
 
-/** The page coordinates currently on screen. */
+/** The page coordinates currently on screen, less any room the page keeps on its left for a side panel. */
 export function visibleViewport(): Viewport {
-  return { left: scrollX, top: scrollY, right: scrollX + document.documentElement.clientWidth, bottom: scrollY + innerHeight }
+  const left = scrollX + parseFloat(getComputedStyle(document.body).paddingLeft)
+  return { left, top: scrollY, right: scrollX + document.documentElement.clientWidth, bottom: scrollY + innerHeight }
 }
 
 /**
