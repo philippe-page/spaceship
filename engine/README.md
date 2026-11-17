@@ -27,7 +27,7 @@ To show that this is the model's internals and not a prompt, the **inside** view
 
 ## Platforms and settings
 
-On an Apple Silicon Mac MLX runs on the GPU. On Windows or Linux it uses CUDA 12 when `nvidia-smi` finds an NVIDIA GPU, and otherwise the CPU, which is too slow to keep up with the knob; set `SPACESHIP_BACKEND` to `cuda` or `cpu` to choose. The CUDA backend has been tried on Windows 10 with an RTX 3080, where LFM3 1.7B writes about 11 tokens a second with the inside view on; Linux and the CPU backend have not been tried on a real machine yet. Nothing from NVIDIA needs installing beyond the driver: the CUDA libraries and headers come as Python packages.
+On an Apple Silicon Mac MLX runs on the GPU. On Windows or Linux it uses CUDA 12 when `nvidia-smi` finds an NVIDIA GPU, and otherwise the CPU; set `SPACESHIP_BACKEND` to `cuda` or `cpu` to choose. It has been run on an Apple Silicon Mac and, with CUDA, on Windows 10; Linux and the CPU backend have not been tried. Nothing from NVIDIA needs installing beyond the driver: the CUDA libraries and headers come as Python packages.
 
 On Windows, if Controlled Folder Access is on and the clone is under a protected folder such as Documents, allow `uv` through it, or the engine cannot create its environment.
 

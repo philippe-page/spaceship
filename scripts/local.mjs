@@ -14,7 +14,9 @@ const ENGINE_HEALTH = `http://localhost:${process.env.SPACESHIP_ENGINE_PORT ?? 8
 
 const backend = process.platform === "darwin" ? undefined : (process.env.SPACESHIP_BACKEND ?? (hasNvidiaGpu() ? "cuda" : "cpu"))
 const [uv, ...uvArgs] = findUv()
-const engine = spawn(uv, [...uvArgs, "run", ...(backend ? ["--extra", backend] : []), "server.py"], { cwd: ENGINE_DIR, stdio: "inherit" })
+// --frozen installs what uv.lock says as it is; without it a uv older than the one that wrote the lock rewrites the file.
+const uvRun = [...uvArgs, "run", "--frozen", ...(backend ? ["--extra", backend] : []), "server.py"]
+const engine = spawn(uv, uvRun, { cwd: ENGINE_DIR, stdio: "inherit" })
 engine.on("error", (error) => {
   console.error(error.message)
   process.exit(1)
