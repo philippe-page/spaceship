@@ -1,9 +1,13 @@
 import { readdirSync } from "node:fs"
 import { resolve } from "node:path"
-import { defineConfig } from "vite"
+import { defaultClientConditions, defineConfig } from "vite"
 
 export default defineConfig({
   base: "/spaceship/",
+  // ONNX Runtime Web is taken in the build that leaves its 29 MB of WebAssembly out of the site (see src/engine/worker.ts).
+  worker: { format: "es" },
+  resolve: { conditions: ["onnxruntime-web-use-extern-wasm", ...defaultClientConditions] },
+  optimizeDeps: { exclude: ["onnxruntime-web"] },
   build: {
     rollupOptions: {
       input: {

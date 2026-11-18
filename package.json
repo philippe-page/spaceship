@@ -7,8 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "format": "prettier --write .",
-    "local": "node scripts/local.mjs"
+    "format": "prettier --write ."
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
@@ -19,6 +18,9 @@
   },
   "dependencies": {
     "@chenglou/pretext": "^1.0.0",
-    "@fontsource-variable/jetbrains-mono": "^5.3.0"
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@huggingface/jinja": "^0.5.13",
+    "@huggingface/tokenizers": "^0.2.0",
+    "onnxruntime-web": "^1.31.1"
   }
 }
