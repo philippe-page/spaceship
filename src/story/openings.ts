@@ -16,3 +16,13 @@ export const STORY_OPENINGS = [
   "They told us never to open the door to",
   "Everything changed the day",
 ]
+
+/** Picks a random story opening that begins with the same words as `text`. */
+export function expandToStoryStart(text: string) {
+  const words = text.match(/\S+/g) ?? []
+  const candidates = STORY_OPENINGS.filter((start) => {
+    const startWords = start.split(/\s+/)
+    return startWords.length >= words.length && words.every((word, i) => word === startWords[i])
+  })
+  return candidates[Math.floor(Math.random() * candidates.length)] ?? text
+}

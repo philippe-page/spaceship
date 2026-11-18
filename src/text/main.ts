@@ -9,6 +9,7 @@ import { createConnections } from "./connections.ts"
 import { makeDraggable } from "./drag.ts"
 import { createFutureKnobs } from "./future-knobs.ts"
 import { onPressAndHold } from "./hold.ts"
+import { createInsideView } from "./inside.ts"
 import { createKeywordRelevance } from "./keyword-relevance.ts"
 import { layoutLines } from "./layout.ts"
 import { createLeftRail } from "./left-rail.ts"
@@ -17,9 +18,11 @@ import { liveAttention } from "./live-attention.ts"
 import { liveSource } from "./live-completion.ts"
 import { liveDimension } from "./live-dimension.ts"
 import { liveInfluence } from "./live-influence.ts"
-import { bindModeToggle } from "./live-mode.ts"
+import { bindModeToggle, modeOf, showMode, urlAs, type Mode } from "./live-mode.ts"
 import { liveRealization } from "./live-realization.ts"
 import { liveRelevance } from "./live-relevance.ts"
+import { createLocalLaunch } from "./local-launch.ts"
+import { createLocalSource, localAttention, localDimension, localInfluence, localRealization, localRelevance } from "./local-sources.ts"
 import { createPointer, type Aim, type PointerTarget, type SelectionPreview, type Zone } from "./pointer.ts"
 import { wordSpans, type Span } from "./segments.ts"
 import { simulatedAttention } from "./simulated-attention.ts"
@@ -56,6 +59,7 @@ const handle = $<HTMLButtonElement>("#pointer")
 const statusElement = $("#status")
 const soundToggle = $<HTMLButtonElement>("#sound-toggle")
 const modeToggle = $<HTMLButtonElement>("#mode-toggle")
+const insideToggle = $<HTMLButtonElement>("#inside-toggle")
 const extraLink = $<HTMLAnchorElement>("#extra-link")
 const railElement = $("#rail")
 const style = getComputedStyle(element)
@@ -64,13 +68,49 @@ await document.fonts.load(style.font)
 const measure = document.createElement("canvas").getContext("2d")!
 measure.font = style.font
 
-const isLive = new URLSearchParams(location.search).get("live") === "true"
-const stream = createTextStream(isLive ? liveSource : simulatedSource, render)
+let mode = modeOf(new URL(location.href))
+const inside = createInsideView({ textElement: element, sidebar: $("#inside"), oddsElement: $("#odds"), isAvailable: mode === "local" })
+const sourcesOf = {
+  sim: {
+    text: simulatedSource,
+    influence: simulatedInfluence,
+    relevance: simulatedRelevance,
+    attention: simulatedAttention,
+    dimension: simulatedDimension,
+    realization: simulatedRealization,
+  },
+  flight: {
+    text: liveSource,
+    influence: liveInfluence,
+    relevance: liveRelevance,
+    attention: liveAttention,
+    dimension: liveDimension,
+    realization: liveRealization,
+  },
+  local: {
+    text: createLocalSource(inside),
+    influence: localInfluence,
+    relevance: localRelevance,
+    attention: localAttention,
+    dimension: localDimension,
+    realization: localRealization,
+  },
+}
+// Looked up at each use: launching a local model changes the mode without a reload (see `enterLocal`).
+const sources: (typeof sourcesOf)[Mode] = {
+  text: { expand: (text) => sourcesOf[mode].text.expand?.(text) ?? text, complete: (...args) => sourcesOf[mode].text.complete(...args) },
+  influence: (...args) => sourcesOf[mode].influence(...args),
+  relevance: (...args) => sourcesOf[mode].relevance(...args),
+  attention: (...args) => sourcesOf[mode].attention(...args),
+  dimension: (...args) => sourcesOf[mode].dimension(...args),
+  realization: (...args) => sourcesOf[mode].realization(...args),
+}
+const stream = createTextStream(sources.text, render)
 const rail = createLeftRail(railElement)
-const connections = createConnections({ source: isLive ? liveInfluence : simulatedInfluence, onChange: refreshRail })
-const relevance = createKeywordRelevance(isLive ? liveRelevance : simulatedRelevance, refreshRail)
+const connections = createConnections({ source: sources.influence, onChange: refreshRail })
+const relevance = createKeywordRelevance(sources.relevance, refreshRail)
 const attention = createAttentionKnobs({
-  source: isLive ? liveAttention : simulatedAttention,
+  source: sources.attention,
   textElement: element,
   knob: handle,
   linkPath: $<SVGPathElement>("#attention-links"),
@@ -89,8 +129,8 @@ const futureKnobs = createFutureKnobs({
   linkPath: $<SVGPathElement>("#future-links"),
   tunedLinkPath: $<SVGPathElement>("#future-tuned-link"),
   hud: $<SVGGElement>("#future-hud"),
-  source: isLive ? liveDimension : simulatedDimension,
-  realization: isLive ? liveRealization : simulatedRealization,
+  source: sources.dimension,
+  realization: sources.realization,
   textElement: element,
   context: () => ({ text: shownText, leads: attention.leads() }),
   onChange: invalidateFuture,
@@ -119,12 +159,29 @@ let didHold = false
 /** The previous drag point, for how fast the knob moves. */
 let lastDrag: { point: Point; at: number } | undefined
 
-bindModeToggle(modeToggle, $<HTMLDialogElement>("#live-keys"), isLive)
+const launchDialog = $<HTMLDialogElement>("#live-keys")
+const localLaunch = createLocalLaunch({
+  dialog: launchDialog,
+  list: $("#local-models"),
+  status: $<HTMLOutputElement>("#local-status"),
+  isLocal: () => mode === "local",
+  enterLocal,
+})
+bindModeToggle(modeToggle, launchDialog, () => mode, localLaunch.refresh)
+if (mode === "local") localLaunch.start()
 startSound()
 showSoundToggle()
 soundToggle.addEventListener("click", () => {
   setSoundOn(!isSoundOn())
   showSoundToggle()
+})
+insideToggle.hidden = mode !== "local"
+showInsideToggle()
+// The sidebar narrows the page as it opens or closes, which moves the column under the knob, as a resize does.
+insideToggle.addEventListener("click", () => {
+  inside.toggle()
+  showInsideToggle()
+  moveTo(pointAt(caret, metricsOf()))
 })
 
 // A quick double click expands or collapses; one whose second press was held opened the fan menu instead.
@@ -176,6 +233,23 @@ createPointer({
 
 addEventListener("resize", () => moveTo(pointAt(caret, metricsOf())))
 moveTo(pointAt(caret, metricsOf()))
+
+/** A model does not outlive its page, so local mode is entered without the reload the other modes take: the story starts over on the model's sources. */
+function enterLocal() {
+  mode = "local"
+  history.replaceState(null, "", urlAs(mode))
+  showMode(modeToggle, mode)
+  insideToggle.hidden = false
+  inside.enable()
+  showInsideToggle()
+  attention.collapse()
+  futureKnobs.clear()
+  stream.truncate(0)
+  isRegenerationHeld = false
+  isFutureStale = false
+  caret = { line: 0, x: 0 }
+  moveTo(pointAt(caret, metricsOf()))
+}
 
 /** The knob stops at the column's right edge, as no line reaches past it. */
 function moveTo({ x, y }: Point) {
@@ -235,6 +309,7 @@ function render() {
   shownText = text
   attention.update(text)
   futureKnobs.follow(story)
+  inside.repaint()
   report()
 }
 
@@ -348,6 +423,7 @@ function pointerTargets(): PointerTarget[] {
       },
     })),
     { rects: [modeToggle.getBoundingClientRect()], pad: TRAY_PAD_PX, isHotOnHover: true, wake: modeToggle },
+    ...(insideToggle.hidden ? [] : [{ rects: [insideToggle.getBoundingClientRect()], pad: TRAY_PAD_PX, isHotOnHover: true, wake: insideToggle }]),
     { rects: [soundToggle.getBoundingClientRect()], pad: TRAY_PAD_PX, isHotOnHover: true, wake: soundToggle },
     { rects: [extraLink.getBoundingClientRect()], pad: TRAY_PAD_PX, isHotOnHover: true, wake: extraLink },
   ]
@@ -368,7 +444,7 @@ function clientRectsOf({ start, end }: Span) {
 function zoneAt(target: Element, x: number, y: number): Zone {
   const point = { x: x + scrollX, y: y + scrollY }
   if (attention.isDragging()) return "box"
-  if (target.closest(".knob, button, a, #tray, dialog")) return "other"
+  if (target.closest(".knob, button, a, #tray, dialog, #inside")) return "other"
   if (isAhead(caretAt(point, metricsOf()), caret)) return "ahead"
   if (!target.closest("#text")) return "other"
   return attention.isOverBox(point) ? "box" : "text"
@@ -500,6 +576,12 @@ function soundWordsCrossed(before: number | undefined, point: Point) {
   lastDrag = { point, at: now }
   if (before !== undefined && shownCount !== undefined && shownCount !== before)
     sounds.word(Math.sign(shownCount - before), Math.abs(shownCount - before), speed, point.x)
+}
+
+function showInsideToggle() {
+  const isOn = inside.isOn()
+  insideToggle.setAttribute("aria-pressed", `${isOn}`)
+  insideToggle.querySelector("b")!.textContent = isOn ? "on" : "off"
 }
 
 function showSoundToggle() {

@@ -54,6 +54,7 @@
         --dimmed: 0.3;
         /* The ruler beside the column: one row per line, each this tall like the text. */
         --rail-width: 144px;
+        --inside-width: 40ch;
         scrollbar-gutter: stable;
         background: var(--bg);
         color: var(--ink);
@@ -525,6 +526,200 @@
           right: calc(100% + var(--gap));
         }
       }
+      /* Words steering flipped, from faint to full ink by how many times likelier it made them. */
+      ::highlight(steering-flipped-1) {
+        text-decoration: underline dotted var(--stroke) var(--ink-4);
+      }
+      ::highlight(steering-flipped-2) {
+        text-decoration: underline dotted var(--stroke) var(--ink-3);
+      }
+      ::highlight(steering-flipped-3) {
+        text-decoration: underline dotted var(--stroke) var(--ink-2);
+      }
+      ::highlight(steering-flipped-4) {
+        text-decoration: underline dotted var(--stroke) var(--ink);
+      }
+      /* Local mode, inside on: the sidebar, pinned to the left edge; the page makes room for it, and the column gives up its left margin before it narrows. */
+      body:has(#inside:not([hidden])) {
+        padding-left: var(--inside-width);
+
+        #text {
+          --column: clamp(30ch, 100% - var(--rail-width) - 1.5 * var(--gap) - var(--margin), 64ch);
+          width: var(--column);
+          margin-left: max(var(--rail-width) + 1.5 * var(--gap), (100% - var(--column)) / 2);
+        }
+      }
+      #inside {
+        position: fixed;
+        inset: 0 auto var(--tray-height) 0;
+        width: var(--inside-width);
+        box-sizing: border-box;
+        padding: var(--padding) calc(1.5 * var(--gap));
+        overflow-y: auto;
+        border-right: var(--hair) solid var(--ink-5);
+        background: var(--bg);
+        font-size: var(--hud-size);
+        line-height: var(--hud-line);
+        font-variant-numeric: tabular-nums;
+        user-select: none;
+
+        section + section {
+          margin-top: calc(3 * var(--gap));
+        }
+        h2 {
+          display: flex;
+          justify-content: space-between;
+          margin: 0 0 var(--gap);
+          font: inherit;
+          color: var(--ink-4);
+          white-space: nowrap;
+        }
+        h2 b {
+          font-weight: inherit;
+          color: var(--ink-2);
+        }
+        .strip {
+          display: grid;
+          grid-template-columns: 2ch 6ch 1fr 1ch 1fr;
+          grid-auto-rows: 11px;
+          column-gap: 6px;
+          align-items: center;
+          font-size: var(--numeral-size);
+
+          ol,
+          li {
+            display: contents;
+          }
+          .num {
+            color: var(--ink-4);
+            text-align: end;
+          }
+          .kind {
+            color: var(--ink-3);
+          }
+          li[data-kind="attention"] .kind {
+            color: var(--ink-2);
+          }
+          .bar {
+            position: relative;
+            height: 7px;
+            background: var(--ink-5);
+
+            i {
+              position: absolute;
+              inset: 0 auto 0 0;
+              transition: width var(--fast);
+            }
+            .drift {
+              width: calc(var(--drift, 0) * 100%);
+              background: var(--ink-2);
+            }
+            .push {
+              width: calc(var(--push, 0) * 100%);
+              background: var(--hot);
+            }
+          }
+          .lock {
+            visibility: hidden;
+            color: var(--hot);
+          }
+          li[data-locked] .lock {
+            visibility: visible;
+          }
+          canvas {
+            grid-column: 5;
+            width: 100%;
+            height: 100%;
+            color: var(--ink);
+          }
+        }
+        .flips ol {
+          margin: 0;
+          padding: 0;
+          list-style: none;
+          color: var(--ink-3);
+
+          li {
+            display: flex;
+            gap: 0.5ch;
+          }
+          s {
+            text-decoration: line-through var(--hair);
+          }
+          b {
+            font-weight: inherit;
+            color: var(--ink);
+          }
+          small {
+            margin-left: auto;
+            font-size: inherit;
+          }
+        }
+      }
+      #odds {
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 10;
+        min-width: 30ch;
+        padding: var(--gap);
+        border: var(--hair) solid var(--ink-4);
+        background: var(--bg);
+        font-size: var(--hud-size);
+        line-height: var(--hud-line);
+        font-variant-numeric: tabular-nums;
+        pointer-events: none;
+      }
+      :is(#inside, #odds) {
+        .candidates {
+          display: grid;
+          gap: 2px;
+          margin: 0;
+          padding: 0;
+          list-style: none;
+        }
+        .candidates li {
+          display: grid;
+          grid-template-columns: 12ch 1fr 9ch;
+          column-gap: var(--gap);
+          align-items: center;
+          color: var(--ink-2);
+
+          &[data-chosen] {
+            color: var(--ink);
+          }
+          &.legend {
+            color: var(--ink-4);
+          }
+        }
+        .token {
+          overflow: hidden;
+          white-space: pre;
+          text-overflow: ellipsis;
+        }
+        /* Probability with steering as a solid bar, without as a hairline one. */
+        .bars {
+          display: grid;
+          gap: 2px;
+
+          i {
+            height: 3px;
+          }
+          .on {
+            width: calc(var(--on) * 100%);
+            background: currentColor;
+          }
+          .off {
+            box-sizing: border-box;
+            width: calc(var(--off) * 100%);
+            border: var(--hair) solid var(--ink-3);
+          }
+        }
+        .pct {
+          white-space: pre;
+          text-align: end;
+        }
+      }
       /* Polybar-style modules in one centered row: model, text, steering, sound; a hairline between every field. */
       #tray {
         position: fixed;
@@ -603,6 +798,7 @@
         display: contents;
       }
       #mode-toggle,
+      #inside-toggle,
       #sound-toggle,
       #extra-link {
         padding: 0 var(--gap);
@@ -644,6 +840,7 @@
       #extra-link {
         text-decoration: none;
       }
+      #inside-toggle[aria-pressed="false"],
       #sound-toggle[aria-pressed="false"] {
         color: var(--ink-4);
       }
@@ -675,17 +872,77 @@
         p {
           color: var(--ink-2);
         }
-        label {
+        fieldset {
           display: grid;
-          grid-template-columns: 9ch 1fr;
+          gap: var(--gap);
+          min-width: 0;
+          margin: 0;
+          padding: 0;
+          border: none;
+        }
+        .engine {
+          display: flex;
           align-items: center;
+          gap: 1ch;
+          color: var(--ink-2);
+          cursor: pointer;
+
+          &:has(:checked) {
+            color: var(--ink);
+          }
+          input {
+            margin: 0;
+            accent-color: var(--ink);
+          }
+          span {
+            width: 12ch;
+          }
+          small {
+            font: inherit;
+            color: var(--ink-3);
+          }
+        }
+        .keys {
+          padding-inline-start: 3ch;
+
+          label {
+            display: grid;
+            grid-template-columns: 9ch 1fr;
+            align-items: center;
+          }
+          &:disabled {
+            color: var(--ink-3);
+          }
+        }
+        #local-models {
+          display: grid;
+          grid-template-columns: 1fr auto;
+          gap: var(--gap) 1ch;
+          margin: 0;
+          padding: 0;
+          list-style: none;
+          &:empty {
+            display: none;
+          }
+          li {
+            display: grid;
+            grid-template-columns: subgrid;
+            grid-column: 1 / -1;
+            align-items: center;
+          }
+        }
+        output {
+          color: var(--ink-2);
+          &:empty {
+            display: none;
+          }
         }
         input,
         button {
           font: inherit;
         }
         /* Masked text rather than password fields, which password managers offer to save whatever autocomplete says. */
-        input {
+        input[type="text"] {
           -webkit-text-security: disc;
           border: var(--hair) solid var(--ink-3);
           &:focus {
@@ -849,8 +1106,28 @@
     </style>
   </head>
   <body>
+    <aside id="inside" aria-label="steering inside the model" hidden>
+      <section class="layers" hidden>
+        <h2>
+          <span><b data-field="model"></b> layers</span>drift
+        </h2>
+        <div class="strip">
+          <canvas aria-hidden="true"></canvas>
+          <ol></ol>
+        </div>
+      </section>
+      <section class="at-knob">
+        <h2>at the knob</h2>
+        <ol class="candidates"></ol>
+      </section>
+      <section class="flips" hidden>
+        <h2>flipped<span data-field="flips"></span></h2>
+        <ol></ol>
+      </section>
+    </aside>
     <div id="rail" aria-hidden="true"></div>
     <div id="text"></div>
+    <div id="odds" role="tooltip" hidden></div>
     <svg id="links" aria-hidden="true">
       <path id="attention-links" />
       <path id="attention-active-link" />
@@ -871,6 +1148,9 @@
     <footer id="tray">
       <button id="mode-toggle" type="button" aria-pressed="false" aria-label="flight mode">mode<b>sim</b></button>
       <output id="status" aria-live="off"></output>
+      <button id="inside-toggle" type="button" aria-pressed="false" title="each word compared with an unsteered copy of the model" hidden>
+        inside<b>off</b>
+      </button>
       <button id="sound-toggle" type="button" aria-pressed="true" aria-label="sound">♪<b>on</b></button>
       <a id="extra-link" href="extra/style-1.html">extra</a>
     </footer>
@@ -878,37 +1158,45 @@
       <form method="dialog" autocomplete="off">
         <h2 id="live-keys-title">launch</h2>
         <p id="live-keys-note">Lift off from the simulator to call the real API with your own keys, kept in this browser's local storage.</p>
-        <label
-          >cerebras
-          <input
-            name="cerebras"
-            type="text"
-            required
-            autocomplete="off"
-            autocapitalize="off"
-            autocorrect="off"
-            spellcheck="false"
-            data-1p-ignore
-            data-lpignore="true"
-            data-bwignore
-            data-form-type="other"
-            autofocus
-        /></label>
-        <label
-          >gemini
-          <input
-            name="gemini"
-            type="text"
-            required
-            autocomplete="off"
-            autocapitalize="off"
-            autocorrect="off"
-            spellcheck="false"
-            data-1p-ignore
-            data-lpignore="true"
-            data-bwignore
-            data-form-type="other"
-        /></label>
+        <fieldset class="engines" aria-label="engine">
+          <label class="engine"><input type="radio" name="engine" value="flight" checked /><span>flight</span></label>
+          <fieldset class="keys">
+            <label
+              >cerebras
+              <input
+                name="cerebras"
+                type="text"
+                required
+                autocomplete="off"
+                autocapitalize="off"
+                autocorrect="off"
+                spellcheck="false"
+                data-1p-ignore
+                data-lpignore="true"
+                data-bwignore
+                data-form-type="other"
+                autofocus
+            /></label>
+            <label
+              >gemini
+              <input
+                name="gemini"
+                type="text"
+                required
+                autocomplete="off"
+                autocapitalize="off"
+                autocorrect="off"
+                spellcheck="false"
+                data-1p-ignore
+                data-lpignore="true"
+                data-bwignore
+                data-form-type="other"
+            /></label>
+          </fieldset>
+          <p>Or fly local with no keys, steering model attention locally.</p>
+          <ul id="local-models" aria-label="local models"></ul>
+        </fieldset>
+        <output id="local-status" aria-live="polite"></output>
         <p class="actions">
           <button type="button" command="close" commandfor="live-keys">abort</button>
           <button value="live">launch</button>
