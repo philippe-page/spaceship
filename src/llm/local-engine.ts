@@ -1,62 +1,51 @@
-const URL_STORAGE = "local-engine-url"
+import type { EngineHealth } from "../engine/host.ts"
+import type { Reply, Request } from "../engine/worker.ts"
 
-const DEFAULT_URL = "http://localhost:8765"
+export type { EngineHealth, EngineModel, LoadProgress } from "../engine/host.ts"
 
-export type EngineModel = {
-  id: string
-  name: string
-  /** Download size in bytes. */
-  size: number
-  downloaded: boolean
-}
-
-/** The model the engine has loaded, if any, and the ones it can load. */
-export type EngineHealth = { model: string | null; models: EngineModel[] }
-
-export type LoadProgress = { status: "downloading"; done: number; total: number } | { status: "loading" } | { status: "ready"; model: string }
+let worker: Worker | undefined
+let lastId = 0
+const listeners = new Map<number, (reply: Reply) => void>()
 
 export async function engineHealth(signal: AbortSignal): Promise<EngineHealth> {
-  const response = await fetchEngine("/health", { signal })
-  if (!response.ok) throw new Error(`${response.status} ${await response.text()}`)
-  return response.json()
+  for await (const health of streamEngine<EngineHealth>("/health", {}, signal)) return health
+  throw new Error("engine: no answer")
 }
 
-/** Posts `body` to the local MLX engine and streams the newline-delimited JSON it answers with; an `error` line throws. */
 export async function* streamEngine<T>(path: string, body: unknown, signal: AbortSignal): AsyncIterable<T> {
-  const response = await fetchEngine(path, {
-    method: "POST",
-    signal,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+  const id = ++lastId
+  const replies: Reply[] = []
+  let wake = () => {}
+  listeners.set(id, (reply) => {
+    replies.push(reply)
+    wake()
   })
-  if (!response.ok) throw new Error(`${response.status} ${await response.text()}`)
-  if (!response.body) throw new Error("no response body")
-
-  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
-  let buffer = ""
-
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) return
-    buffer += value
-
-    const lines = buffer.split("\n")
-    buffer = lines.pop() ?? ""
-
-    for (const line of lines) {
-      if (!line.trim()) continue
-      const item = JSON.parse(line)
-      if (item.error) throw new Error(`engine: ${item.error}`)
-      yield item as T
+  const onAbort = () => wake()
+  signal.addEventListener("abort", onAbort)
+  post({ id, path, body })
+  try {
+    while (true) {
+      signal.throwIfAborted()
+      const reply = replies.shift()
+      if (!reply) await new Promise<void>((resolve) => (wake = resolve))
+      else if ("error" in reply) throw new Error(`engine: ${reply.error}`)
+      else if ("done" in reply) return
+      else yield reply.item as T
     }
+  } finally {
+    signal.removeEventListener("abort", onAbort)
+    listeners.delete(id)
+    post({ id, cancel: true })
   }
 }
 
-/**
- * The engine only answers pages served from this machine, so a page served from anywhere else, like the published demo,
- * does not go looking for it: a browser asks its visitor for permission before a public page may reach their machine.
- */
-async function fetchEngine(path: string, init: RequestInit) {
-  if (!["localhost", "127.0.0.1"].includes(location.hostname)) throw new Error("the engine only answers pages served from this machine")
-  return fetch(`${localStorage.getItem(URL_STORAGE)?.trim() || DEFAULT_URL}${path}`, init)
+function post(request: Request) {
+  if (!worker) {
+    worker = new Worker(new URL("../engine/worker.ts", import.meta.url), { type: "module" })
+    worker.addEventListener("message", ({ data }: MessageEvent<Reply>) => listeners.get(data.id)?.(data))
+    worker.addEventListener("error", (event) => {
+      for (const [id, listener] of listeners) listener({ id, error: event.message || "the engine stopped" })
+    })
+  }
+  worker.postMessage(request)
 }

@@ -4,7 +4,7 @@ import { KEY_STORAGE as GEMINI_KEY_STORAGE } from "../llm/decisions.ts"
 /** Each key's field in the dialog's form, by name, and where it is kept for reuse. */
 const KEY_FIELDS = { cerebras: CEREBRAS_KEY_STORAGE, gemini: GEMINI_KEY_STORAGE }
 
-/** Sim plays simulated sources; flight calls the hosted models; local runs the MLX engine on this machine. */
+/** Sim plays simulated sources; flight calls the hosted models; local runs a model in this page. */
 export type Mode = "sim" | "flight" | "local"
 
 export function modeOf(url: URL): Mode {
@@ -16,7 +16,7 @@ export function modeOf(url: URL): Mode {
 /**
  * The sources are chosen when the page loads, so switching reloads it in the other mode; leaving flight or local returns to sim.
  * Launching asks for both API keys, prefilled with the ones kept from last time, and the dialog's submit button returns "live".
- * Its local section, which needs no keys, is told when the dialog opens (`onOpen`) and reloads the page itself once a model is loaded.
+ * Its local section, which needs no keys, is told when the dialog opens (`onOpen`) and reloads the page itself when a model is launched.
  */
 export function bindModeToggle(toggle: HTMLButtonElement, dialog: HTMLDialogElement, mode: Mode, onOpen: () => void) {
   const form = dialog.querySelector("form")!

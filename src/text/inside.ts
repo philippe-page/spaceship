@@ -1,10 +1,7 @@
+import type { Candidate, ComparedStep } from "../engine/generation.ts"
+import type { ModelLayout } from "../engine/host.ts"
+import type { LayerKind } from "../engine/instruments.ts"
 import { domPointAt, textOffsetOf } from "./text-offsets.ts"
-
-/** A token the model weighed for one position, with its probability under the steered model and under an unsteered copy that read the same text. */
-export type Candidate = { token: string; on: number; off: number; chosen: boolean }
-
-/** One generated token: the candidates for it, and the token the unsteered copy would have written instead, if steering flipped it. */
-export type ComparedStep = { top: Candidate[]; instead: string | null }
 
 export type InsideView = ReturnType<typeof createInsideView>
 
@@ -22,26 +19,31 @@ const LIFT_BOUNDS = [1.5, 4, 12]
 const CANDIDATE_ROWS = 6
 const FLIP_ROWS = 16
 const ODDS_OFFSET_PX = 6
+/** Drift, and push on the same scale, that fills a layer's bar. */
+const DRIFT_FULL = 0.5
+const HISTORY_STEPS = 48
+/** Layer bars show drift averaged over this many tokens up to the knob's, so they move with the text rather than with each token. */
+const SMOOTHING_STEPS = 8
+const KIND_LABELS: Record<LayerKind, string> = { attention: "attn", "windowed attention": "slide", "linear attention": "linear", convolution: "conv" }
 
-/**
- * Shows what steering does inside the local model, while the engine runs an unsteered copy of the model beside the steered one on the same text:
- * words steering flipped get a dotted underline in the story; a sidebar shows, at the main knob, the candidates the model weighed for the next word with and without
- * steering, and lists the words steering flipped so far; hovering a generated word shows its candidates the same way.
- * Only available in local mode, where it starts on; turning it off is remembered.
- */
 export function createInsideView({ textElement, sidebar, oddsElement, isAvailable }: InsideViewOptions) {
+  const layerSection = sidebar.querySelector<HTMLElement>(".layers")!
+  const modelField = sidebar.querySelector<HTMLElement>("[data-field='model']")!
+  const layerList = sidebar.querySelector<HTMLOListElement>(".layers ol")!
+  const history = sidebar.querySelector<HTMLCanvasElement>(".layers canvas")!
   const candidateList = sidebar.querySelector<HTMLOListElement>(".at-knob ol")!
   const flipSection = sidebar.querySelector<HTMLElement>(".flips")!
   const flipCount = sidebar.querySelector<HTMLElement>("[data-field='flips']")!
   const flipList = sidebar.querySelector<HTMLOListElement>(".flips ol")!
   let tokens: Token[] = []
+  let layerRows: HTMLElement[] = []
   let isOn = isAvailable && localStorage.getItem(STORAGE_KEY) !== "off"
   let frame: number | undefined
   sidebar.hidden = !isOn
 
   if (isAvailable) addEventListener("pointermove", showOddsAt, { passive: true })
 
-  return { isOn: () => isOn, toggle, start, record, repaint }
+  return { isOn: () => isOn, toggle, lay, start, record, repaint }
 
   function toggle() {
     isOn = !isOn
@@ -49,6 +51,13 @@ export function createInsideView({ textElement, sidebar, oddsElement, isAvailabl
     sidebar.hidden = !isOn
     oddsElement.hidden = true
     repaint()
+  }
+
+  function lay({ model, layers }: ModelLayout) {
+    modelField.textContent = model
+    layerRows = layers.map(layerRow)
+    layerList.replaceChildren(...layerRows.toReversed())
+    history.style.gridRow = `1 / span ${layers.length}`
   }
 
   /** A generation starts after `from` non-space characters; what was recorded past there belonged to text it replaces. */
@@ -61,7 +70,6 @@ export function createInsideView({ textElement, sidebar, oddsElement, isAvailabl
     repaint()
   }
 
-  /** Call whenever the shown text changes. */
   function repaint() {
     if (isAvailable) frame ??= requestAnimationFrame(paint)
   }
@@ -78,13 +86,51 @@ export function createInsideView({ textElement, sidebar, oddsElement, isAvailabl
     if (isOn) paintSidebar(positions.length, shown.length, flipped)
   }
 
-  /** The step for the next word at the knob (or the last one written, at the end of the text), and the flipped words so far, newest first. */
   function paintSidebar(knob: number, shownCount: number, flipped: Token[]) {
-    const atKnob = tokens.findLast(({ at }) => at <= knob)
+    const index = tokens.findLastIndex(({ at }) => at <= knob)
+    const atKnob = index === -1 ? undefined : tokens[index]
+    paintLayers(tokens.slice(Math.max(0, index + 1 - HISTORY_STEPS), index + 1).map(({ step }) => step))
     candidateList.replaceChildren(...(atKnob ? candidateRows(atKnob.step) : []))
     flipSection.hidden = shownCount === 0
     flipCount.textContent = `${flipped.length} of ${shownCount}`
     flipList.replaceChildren(...flipped.slice(-FLIP_ROWS).reverse().map(flipRow))
+  }
+
+  function paintLayers(steps: ComparedStep[]) {
+    layerSection.hidden = !steps.length || !layerRows.length
+    if (layerSection.hidden) return
+    const atKnob = steps.at(-1)!
+    const recent = steps.slice(-SMOOTHING_STEPS)
+    layerRows.forEach((row, layer) => {
+      const drift = recent.reduce((sum, step) => sum + step.drift[layer], 0) / recent.length
+      row.style.setProperty("--drift", `${Math.min(1, drift / DRIFT_FULL)}`)
+      row.style.setProperty("--push", `${Math.min(1, atKnob.push[layer] / DRIFT_FULL)}`)
+      row.toggleAttribute("data-locked", atKnob.isLocked && row.dataset.kind === "attention")
+    })
+    paintHistory(steps)
+  }
+
+  function paintHistory(steps: ComparedStep[]) {
+    const scale = devicePixelRatio
+    const { clientWidth, clientHeight } = history
+    if (history.width !== clientWidth * scale || history.height !== clientHeight * scale) {
+      history.width = clientWidth * scale
+      history.height = clientHeight * scale
+    }
+    const context = history.getContext("2d")!
+    context.setTransform(scale, 0, 0, scale, 0, 0)
+    context.clearRect(0, 0, clientWidth, clientHeight)
+    context.fillStyle = getComputedStyle(history).color
+    const column = clientWidth / HISTORY_STEPS
+    const row = clientHeight / layerRows.length
+    const offset = HISTORY_STEPS - steps.length
+    steps.forEach(({ drift }, step) => {
+      drift.forEach((value, layer) => {
+        context.globalAlpha = Math.min(1, value / DRIFT_FULL)
+        context.fillRect((offset + step) * column, (layerRows.length - 1 - layer) * row, Math.max(1, column - 1), Math.max(1, row - 1))
+      })
+    })
+    context.globalAlpha = 1
   }
 
   function showOddsAt(event: PointerEvent) {
@@ -98,7 +144,6 @@ export function createInsideView({ textElement, sidebar, oddsElement, isAvailabl
     oddsElement.hidden = false
   }
 
-  /** The recorded token whose characters are under the viewport point, with its box there. */
   function tokenUnder(x: number, y: number) {
     const position = document.caretPositionFromPoint(x, y)
     if (!position || !textElement.contains(position.offsetNode)) return
@@ -113,7 +158,6 @@ export function createInsideView({ textElement, sidebar, oddsElement, isAvailabl
     }
   }
 
-  /** `positions` are the shown text's non-space characters' offsets (see `nonSpacePositions`). */
   function rangeOfToken(positions: number[], { at, length }: Token) {
     if (at + length > positions.length) return
     const range = document.createRange()
@@ -123,12 +167,10 @@ export function createInsideView({ textElement, sidebar, oddsElement, isAvailabl
   }
 }
 
-/** How far into the story `text` reaches, in the count the inside view places tokens by. */
 export function nonSpaceLength(text: string) {
   return text.replace(/\s/g, "").length
 }
 
-/** The offset in `text` of each non-space character, in order. */
 function nonSpacePositions(text: string) {
   const positions: number[] = []
   for (let i = 0; i < text.length; i++) if (!/\s/.test(text[i])) positions.push(i)
@@ -139,7 +181,14 @@ function contains({ left, right, top, bottom }: DOMRect, x: number, y: number) {
   return x >= left && x <= right && y >= top && y <= bottom
 }
 
-/** How many times likelier steering made the word it wrote: infinitely, for a word the unsteered model could not have drawn at all. */
+function layerRow(kind: LayerKind, index: number) {
+  const row = document.createElement("li")
+  row.dataset.kind = kind
+  row.innerHTML = `<span class="num">${index}</span><span class="kind">${KIND_LABELS[kind]}</span><span class="bar"><i class="drift"></i><i class="push"></i></span><span class="lock">◆</span>`
+  return row
+}
+
+/** Infinite for a word the unsteered model could not have drawn. */
 function liftOf({ top }: ComparedStep) {
   const chosen = top.find((candidate) => candidate.chosen)
   return chosen ? chosen.on / chosen.off : 1
@@ -155,10 +204,7 @@ function liftLabel(step: ComparedStep) {
   return `×${lift < 10 ? lift.toFixed(1) : Math.round(lift)}`
 }
 
-/**
- * A legend row, then the likeliest candidates with their probability steered (solid bar) and unsteered (hairline bar);
- * the word written, when sampled from further down, takes the last row.
- */
+/** The word written, when sampled from further down, takes the last row. */
 function candidateRows({ top }: ComparedStep) {
   const legend = Object.assign(document.createElement("li"), { className: "legend", innerHTML: `<span></span><span></span><span class="pct">  on  off</span>` })
   const shown = top.slice(0, CANDIDATE_ROWS)
@@ -179,7 +225,6 @@ function candidateRow({ token, on, off, chosen }: Candidate) {
   return row
 }
 
-/** What the unsteered model would have written, then what steering wrote instead. */
 function flipRow({ step }: Token) {
   const row = document.createElement("li")
   const written = step.top.find((candidate) => candidate.chosen)?.token ?? ""
@@ -192,7 +237,6 @@ function flipRow({ step }: Token) {
   return row
 }
 
-/** A token as a word: without the space most tokens start with, line breaks drawn, and a token of spaces alone shown as one. */
 function visible(token: string) {
   const shown = token.replace(/^ /, "").replace(/\n/g, "↵")
   return shown.trim() || shown.includes("↵") ? shown : "␣"

@@ -143,6 +143,7 @@ let topUpTimer: number | undefined
 let retryAt = 0
 let retryMs = RETRY_MS
 let isFutureStale = false
+let modelProgress = ""
 let prepared: { text: string; layout: PreparedTextWithSegments } | undefined
 let holdSound: Sound | undefined
 /** Whether the current press opened the fan menu, so its double click does not also expand or collapse. */
@@ -155,10 +156,15 @@ const localLaunch = createLocalLaunch({
   dialog: launchDialog,
   list: $("#local-models"),
   status: $<HTMLOutputElement>("#local-status"),
-  onReady: () => reloadAs("local"),
+  isLocal: mode === "local",
+  enterLocal: () => reloadAs("local"),
+  onProgress: (message) => {
+    modelProgress = message
+    report()
+  },
 })
 bindModeToggle(modeToggle, launchDialog, mode, localLaunch.refresh)
-if (mode === "local") localLaunch.openUnlessLoaded()
+if (mode === "local") localLaunch.start()
 startSound()
 showSoundToggle()
 soundToggle.addEventListener("click", () => {
@@ -307,6 +313,7 @@ function report() {
     boxes: attention.leads().length,
     steering: futureKnobs.controls().length,
     pinned: futureKnobs.pinnedCount(),
+    modelProgress,
   })
 }
 
