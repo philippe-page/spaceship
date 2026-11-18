@@ -10,14 +10,9 @@ Watch on [Instagram](https://www.instagram.com/reels/DfyQPhFtW-z/) and [YouTube]
 
 ## Local mode
 
-Flight mode steers hosted models through their prompts. Local mode runs a small open model on your machine with [MLX](https://github.com/ml-explore/mlx) and works on the model's internals instead, with the same interface: the future knobs add steering vectors to its activations, the attention boxes bias its attention, and the readouts come from its own attention weights and likelihoods. It needs Node and [uv](https://docs.astral.sh/uv/getting-started/installation/), which installs the engine's Python and packages by itself on the first run:
+Flight mode steers hosted models through their prompts. Local mode runs a small open model in the page itself, on WebGPU, and works on the model's internals instead, with the same interface: the future knobs add steering vectors to its activations, the attention boxes bias its attention, and the readouts come from its own attention weights and likelihoods. It needs no keys and nothing installed: pick the model in the launch dialog, and the browser downloads it once and keeps it.
 
-```sh
-npm install
-npm run local    # starts the engine and the page; pick a model in the dialog, and it downloads then
-```
-
-The models, how each interaction works inside them, the platforms it has been run on and the licenses are in [engine/README.md](./engine/README.md).
+The models, how each interaction works inside them, and what has and has not been tried are in [src/engine/README.md](./src/engine/README.md).
 
 ## Conjecture
 
