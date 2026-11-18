@@ -18,13 +18,6 @@ const FULL_RELEVANCE_RATIO = 12
 /** Per-token log-likelihood gap between the toward- and away-steered model, beyond the story so far's own gap, that reads as a clear yes (about 73%). */
 const REALIZATION_GAP_SCALE = 0.3
 
-const STOPWORDS = new Set(
-  `a an the and or but so if then than that this these those there here of in on at to for from with by as into onto upon
-  about over under after before again is was were be been being am are has have had do does did not no nor it its he him his
-  she her hers they them their we us our i me my you your yours who whom whose which what when where why how all any each
-  few more most other some such only own same too very can will just would could should may might must shall up down out off
-  one`.split(/\s+/),
-)
 const WORD = /[\p{L}\p{N}_’']+/gu
 const CLAUSE_BREAK = /[.!?;:,—"“”()]/
 
@@ -47,12 +40,9 @@ export async function focusBoxes(engine: Engine, text: string): Promise<FocusBox
     engine.release(cache)
   }
 
-  const words = [...story.matchAll(WORD)].map((match) => ({ start: match.index, end: match.index + match[0].length, word: match[0] }))
+  const words = [...story.matchAll(WORD)].map((match) => ({ start: match.index, end: match.index + match[0].length }))
   const wordScores = words.map(({ start, end }) => sum(positionsIn(spans, [start, end]).map((position) => tokenScores[position])))
-  const ranked = words
-    .map((_, index) => index)
-    .filter((index) => !STOPWORDS.has(words[index].word.toLowerCase()))
-    .sort((a, b) => wordScores[b] - wordScores[a])
+  const ranked = words.map((_, index) => index).sort((a, b) => wordScores[b] - wordScores[a])
   const boxes: FocusBox[] = []
   const covered = new Set<number>()
   for (const index of ranked) {
