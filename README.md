@@ -1,6 +1,8 @@
-# 🕹️ Spaceship IDE
+# 🕹️ Spaceship Local
 
-Steer your ideas in realtime, space pilot style!
+Steer your ideas in realtime, space pilot style, with a model that runs on your own machine.
+
+Spaceship Local is a fork of [Chuanqi Sun's Spaceship IDE](https://github.com/chuanqisun/spaceship) that adds a local mode. Alongside the original flight mode, which steers hosted models through their prompts, it can run a small open model in the browser on WebGPU and steer it from the inside, with no API keys, no server and nothing to install. Apart from this introduction and the Local mode section, the README is the original project's, written by its author, and the demos it links run the original.
 
 ![Screencast](./extra/screencast.gif)
 
